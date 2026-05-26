@@ -1,11 +1,12 @@
-const CACHE_NAME = 'tt-pro-ultimate-v1';
+// Incremented to v2 to completely wipe out the old locked cache
+const CACHE_NAME = 'tt-pro-ultimate-v2';
 const ASSETS_TO_CACHE = [
   'index.html',
   'manifest.json'
 ];
 
-// Installs and structural caching routines
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Forces the fresh code to activate immediately
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
@@ -13,22 +14,20 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Cache management structure cleaning lifecycle
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            return caches.delete(key);
+            return caches.delete(key); // Blasts away the old v1 locked data
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Fetch events interception
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request).catch(() => {
