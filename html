@@ -56,35 +56,6 @@
         
         button, select { padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; font-weight: bold; font-size: 12px; }
         .btn-gen { background: #28a745; color: white; border: none; }
-
-        /* Lockscreen Styles */
-        .lock-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999999; font-family: Arial, sans-serif; text-align: center; }
-        .lock-container h1 { color: #d9534f; font-size: 32px; margin-bottom: 15px; font-weight: bold; }
-        .lock-container p { font-size: 22px; color: #2c3e50; font-weight: bold; }
-
-        /* Responsive Mobile Layout CSS Rules */
-        @media screen and (max-width: 768px) {
-            body { padding: 5px; }
-            .school-info-inputs input[type="text"] { width: 100% !important; margin-bottom: 5px; }
-            .controls, .settings-bar { flex-direction: column; align-items: stretch; gap: 10px; }
-            button, select { width: 100%; box-sizing: border-box; text-align: center; }
-            .config-row { flex-direction: column; align-items: stretch; gap: 12px; }
-            .config-group { justify-content: space-between; border-left: none !important; padding-left: 0 !important; }
-            .day-section { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 15px; }
-            table { table-layout: auto; min-width: 700px; }
-            th, td { font-size: 10px; padding: 4px; }
-            .break-cell { width: auto !important; writing-mode: horizontal-tb; text-orientation: mixed; height: auto !important; }
-        }
-
-        @media print { 
-            @page { margin: 0.8cm; } 
-            .panel, .view-bar, .settings-bar, #status, .school-info-inputs, .avail-panel, .config-panel { display: none !important; } 
-            body { background: white; padding: 0; margin: 0; }
-            .container { max-width: 100%; margin: 0; }
-            .day-section { page-break-after: always; }
-            .school-logo { display: block !important; }
-            .mosque-strips { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
     </style>
 </head>
 <body id="mainBody">
@@ -244,24 +215,6 @@
 </div>
 
 <script>
-// Expiry System Verification Execution Code
-function checkSystemValidity() {
-    // Extended the system deployment gate to bypass lock errors
-    const expirationThreshold = new  Date("2027-12-31T23:59:59");
-    const rightNow = new Date();
-    if (rightNow > expirationThreshold) {
-        document.getElementById("wholeAppWrapper").innerHTML = `
-            <div class="lock-container">
-                <h1>TIMETABLE SYSTEM EXPIRED</h1>
-                <p>ALERT: CONTACT DEVELOPER 0763418732</p>
-            </div>
-        `;
-        alert("ALERT: CONTACT DEVELOPER 0763418732");
-        return true;
-    }
-    return false;
-}
-
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"];
 const FORMS = ["F1A","F1B","F1C","F2A","F2B","F2C","F2D","F3A","F3B","F3C","F4A","F4B"];
 
@@ -274,7 +227,6 @@ let customSpecialBlocks = [
 ];
 
 function togglePanel(id) {
-    if (checkSystemValidity()) return;
     const p = document.getElementById(id);
     p.style.display = p.style.display === 'block' ? 'none' : 'block';
 }
@@ -291,7 +243,6 @@ function toggleCompact(cb) { document.getElementById('mainBody').classList.toggl
 function adjustHeight(val) { document.documentElement.style.setProperty('--row-height', val + 'px'); }
 
 function recalculatePeriods() {
-    if (checkSystemValidity()) return;
     const startTimeStr = document.getElementById('cfgStartTime').value;
     const periodDuration = parseInt(document.getElementById('cfgPeriodDuration').value) || 40;
     
@@ -362,7 +313,6 @@ function getSpecialContent(day, p) {
     return null;
 }
 
-// Global script routines placeholders
 function populateAvailDropdowns() {}
 function handleUpload(e) {}
 function startGeneration() {}
@@ -375,7 +325,6 @@ function addUnavailability() {}
 function saveToLocalStorage() {}
 function syncHeader() {}
 
-// Core Engine Trigger
 recalculatePeriods();
 </script>
 
@@ -383,8 +332,8 @@ recalculatePeriods();
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('service-worker.js')
-        .then(reg => console.log('PWA Service Worker Operational!'))
-        .catch(err => console.error('PWA Registration Aborted:', err));
+        .then(reg => console.log('PWA Operational!'))
+        .catch(err => console.error('PWA Aborted:', err));
     });
   }
 </script>
