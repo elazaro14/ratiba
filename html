@@ -247,7 +247,7 @@
 // Expiry System Verification Execution Code
 function checkSystemValidity() {
     // Extended the system deployment gate to bypass lock errors
-    const expirationThreshold = new Date("2027-12-31T23:59:59");
+    const expirationThreshold = new  Date("2027-12-31T23:59:59");
     const rightNow = new Date();
     if (rightNow > expirationThreshold) {
         document.getElementById("wholeAppWrapper").innerHTML = `
