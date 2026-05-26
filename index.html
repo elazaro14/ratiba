@@ -56,6 +56,29 @@
         
         button, select { padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; font-weight: bold; font-size: 12px; }
         .btn-gen { background: #28a745; color: white; border: none; }
+
+        @media screen and (max-width: 768px) {
+            body { padding: 5px; }
+            .school-info-inputs input[type="text"] { width: 100% !important; margin-bottom: 5px; }
+            .controls, .settings-bar { flex-direction: column; align-items: stretch; gap: 10px; }
+            button, select { width: 100%; box-sizing: border-box; text-align: center; }
+            .config-row { flex-direction: column; align-items: stretch; gap: 12px; }
+            .config-group { justify-content: space-between; border-left: none !important; padding-left: 0 !important; }
+            .day-section { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 15px; }
+            table { table-layout: auto; min-width: 700px; }
+            th, td { font-size: 10px; padding: 4px; }
+            .break-cell { width: auto !important; writing-mode: horizontal-tb; text-orientation: mixed; height: auto !important; }
+        }
+
+        @media print { 
+            @page { margin: 0.8cm; } 
+            .panel, .view-bar, .settings-bar, #status, .school-info-inputs, .avail-panel, .config-panel { display: none !important; } 
+            body { background: white; padding: 0; margin: 0; }
+            .container { max-width: 100%; margin: 0; }
+            .day-section { page-break-after: always; }
+            .school-logo { display: block !important; }
+            .mosque-strips { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
     </style>
 </head>
 <body id="mainBody">
@@ -306,26 +329,358 @@ function getSpecialContent(day, p) {
             const startIdx = PERIODS.filter(x => x.p !== "BREAK" && x.p !== "LUNCH").findIndex(x => x.p === rule.start);
             const endIdx = PERIODS.filter(x => x.p !== "BREAK" && x.p !== "LUNCH").findIndex(x => x.p === rule.end);
             if (targetIdx >= startIdx && targetIdx <= endIdx) {
-                return rule;
+                return { text: rule.text, class: rule.class };
             }
         }
     }
     return null;
 }
 
-function populateAvailDropdowns() {}
-function handleUpload(e) {}
-function startGeneration() {}
-function clearSystemBackup() {}
-function renderMaster() {}
-function renderIndividual(type) {}
-function renderLoadSummary() {}
-function addSpecialBlock() {}
-function addUnavailability() {}
-function saveToLocalStorage() {}
-function syncHeader() {}
+function addSpecialBlock() {
+    const day = document.getElementById('spDay').value;
+    const start = document.getElementById('spStart').value;
+    const end = document.getElementById('spEnd').value;
+    const text = document.getElementById('spLabel').value.toUpperCase();
+    const className = document.getElementById('spStyle').value;
 
+    const startIdx = PERIODS.filter(x => x.p !== "BREAK" && x.p !== "LUNCH").findIndex(x => x.p === start);
+    const endIdx = PERIODS.filter(x => x.p !== "BREAK" && x.p !== "LUNCH").findIndex(x => x.p === end);
+
+    if (startIdx > endIdx) {
+        alert("Invalid range setup! 'From' period cannot fall after 'To' period.");
+        return;
+    }
+
+    customSpecialBlocks.push({ day, start, end, text, class: className });
+    document.getElementById('spLabel').value = "";
+    updateSpecialBlocksList();
+    saveToLocalStorage();
+    if(timetable.length > 0) syncHeader();
+}
+
+function updateSpecialBlocksList() {
+    const list = document.getElementById('specialBlocksList');
+    if (!list) return;
+    list.innerHTML = customSpecialBlocks.map((b, i) => 
+        `<span style="background:#eee; padding:3px 6px; border-radius:3px; border:1px solid #ccc;">${b.day} [${b.start}-${b.end}] <b>${b.text || 'STRIPS'}</b> <b onclick="removeSpecialBlock(${i})" style="cursor:pointer; color:red; margin-left:5px;">×</b></span>`
+    ).join('');
+}
+
+function removeSpecialBlock(i) {
+    customSpecialBlocks.splice(i, 1);
+    updateSpecialBlocksList();
+    saveToLocalStorage();
+    if(timetable.length > 0) syncHeader();
+}
+
+function handleUpload(e) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const lines = event.target.result.split('\n').slice(1).filter(l => l.trim());
+            rawData = lines.map(l => {
+                const p = l.split(',');
+                return { subject: p[0].trim(), teacher: p[1].trim(), form: p[3].trim() };
+            });
+            document.getElementById('genBtn').disabled = false;
+            document.getElementById('status').style.color = "#28a745";
+            document.getElementById('status').innerText = `Data loaded: ${rawData.length} lessons. Ready to generate.`;
+            populateFilters();
+            populateAvailDropdowns();
+            saveToLocalStorage();
+        } catch (err) { document.getElementById('status').innerText = "Error reading CSV format."; }
+    };
+    reader.readAsText(e.target.files[0]);
+}
+
+function populateFilters() {
+    const teachers = [...new Set(rawData.map(x => x.teacher))].sort();
+    document.getElementById('teacherSelect').innerHTML = '<option value="">-- View Teacher --</option>' + teachers.map(t => `<option value="${t}">${t}</option>`).join('');
+    document.getElementById('streamSelect').innerHTML = '<option value="">-- View Class --</option>' + FORMS.map(f => `<option value="${f}">${f}</option>`).join('');
+}
+
+function populateAvailDropdowns() {
+    const teachers = [...new Set(rawData.map(x => x.teacher))].sort();
+    document.getElementById('availTeacher').innerHTML = teachers.map(t => `<option value="${t}">${t}</option>`).join('');
+    document.getElementById('availDay').innerHTML = DAYS.map(d => `<option value="${d}">${d}</option>`).join('');
+    document.getElementById('availPeriod').innerHTML = PERIODS.filter(p=>p.p!=="BREAK" && p.p!=="LUNCH").map(p => `<option value="${p.p}">${p.p}</option>`).join('');
+}
+
+function addUnavailability() {
+    const t = document.getElementById('availTeacher').value;
+    const d = document.getElementById('availDay').value;
+    const p = document.getElementById('availPeriod').value;
+    if(!unavailabilities.some(u => u.t === t && u.d === d && u.p === p)) {
+        unavailabilities.push({t, d, p});
+        updateAvailList();
+        saveToLocalStorage();
+    }
+}
+
+function updateAvailList() {
+    const list = document.getElementById('availList');
+    list.innerHTML = unavailabilities.map((u, i) => 
+        `<span style="background:#eee; padding:3px 6px; border-radius:3px;">${u.t} (${u.d} ${u.p}) <b onclick="removeAvail(${i})" style="cursor:pointer; color:red">×</b></span>`
+    ).join('');
+}
+
+function removeAvail(i) { unavailabilities.splice(i, 1); updateAvailList(); saveToLocalStorage(); }
+
+function startGeneration() {
+    timetable = [];
+    const vp = ["P1","P2","P3","P4","P5","P6","P7","P8","P9"];
+    
+    const breakAfter = document.getElementById('cfgBreakAfter').value;
+    const breakAfterIdx = vp.indexOf(breakAfter);
+    
+    const hasLunch = document.getElementById('cfgHasLunch').value === "yes";
+    const lunchAfter = document.getElementById('cfgLunchAfter').value;
+    const lunchAfterIdx = hasLunch ? vp.indexOf(lunchAfter) : -1;
+
+    const grouped = {};
+    rawData.forEach(l => {
+        const k = `${l.form}-${l.subject}`;
+        if(!grouped[k]) grouped[k] = [];
+        grouped[k].push(l);
+    });
+
+    Object.values(grouped).forEach(lessons => {
+        let rem = lessons.length;
+        while(rem >= 2) {
+            let placed = false;
+            for(let att = 0; att < 400; att++) {
+                const day = DAYS[Math.floor(Math.random()*5)];
+                const idx = Math.floor(Math.random()*8);
+                const p1 = vp[idx], p2 = vp[idx+1];
+                
+                if (idx === breakAfterIdx || (hasLunch && idx === lunchAfterIdx)) continue;
+
+                const dayC = timetable.filter(x => x.day === day && x.form === lessons[0].form && x.subject === lessons[0].subject).length;
+                if(dayC === 0 && canPlace(day, p1, lessons[0]) && canPlace(day, p2, lessons[0]) && !getSpecialContent(day, p1) && !getSpecialContent(day, p2)) {
+                    timetable.push({...lessons[0], day, period: p1});
+                    timetable.push({...lessons[0], day, period: p2});
+                    rem -= 2; placed = true; break;
+                }
+            }
+            if(!placed) break;
+        }
+        while(rem > 0) {
+            let placedSingle = false;
+            for(let att = 0; att < 300; att++) {
+                const day = DAYS[Math.floor(Math.random()*5)];
+                const per = vp[Math.floor(Math.random()*9)];
+                const perIdx = vp.indexOf(per);
+                
+                const isAdjacentToBreak = (perIdx === breakAfterIdx || perIdx === breakAfterIdx + 1);
+                let hasSubjectOnOtherSide = false;
+                if (isAdjacentToBreak) {
+                    const otherSide = (perIdx === breakAfterIdx) ? vp[breakAfterIdx + 1] : vp[breakAfterIdx];
+                    hasSubjectOnOtherSide = timetable.some(x => x.day === day && x.period === otherSide && x.form === lessons[0].form && x.subject === lessons[0].subject);
+                }
+                
+                if (hasLunch && !hasSubjectOnOtherSide) {
+                    const isAdjacentToLunch = (perIdx === lunchAfterIdx || perIdx === lunchAfterIdx + 1);
+                    if (isAdjacentToLunch) {
+                        const otherLunchSide = (perIdx === lunchAfterIdx) ? vp[lunchAfterIdx + 1] : vp[lunchAfterIdx];
+                        hasSubjectOnOtherSide = timetable.some(x => x.day === day && x.period === otherLunchSide && x.form === lessons[0].form && x.subject === lessons[0].subject);
+                    }
+                }
+
+                const dayC = timetable.filter(x => x.day === day && x.form === lessons[0].form && x.subject === lessons[0].subject).length;
+                if(dayC === 0 && canPlace(day, per, lessons[0]) && !getSpecialContent(day, per) && !hasSubjectOnOtherSide) {
+                    timetable.push({...lessons[0], day, period: per});
+                    rem--; placedSingle = true; break;
+                }
+            }
+            if(!placedSingle) rem--;
+        }
+    });
+    document.getElementById('viewBar').style.display = 'block';
+    renderMaster();
+    saveToLocalStorage();
+}
+
+function canPlace(d, p, l) {
+    const isTeacherBusy = timetable.some(t => t.day === d && t.period === p && t.teacher === l.teacher);
+    const isFormBusy = timetable.some(t => t.day === d && t.period === p && t.form === l.form);
+    const isTeacherOff = unavailabilities.some(u => u.t === l.teacher && u.d === d && u.p === p);
+    return !isTeacherBusy && !isFormBusy && !isTeacherOff;
+}
+
+function getHeaderHTML(sub = "MASTER TIMETABLE") {
+    const sName = document.getElementById('schoolNameInput').value || "SCHOOL NAME";
+    const aYear = document.getElementById('academicYearInput').value || "ACADEMIC YEAR";
+    const imgTag = logoSrc ? `<img src="${logoSrc}" class="school-logo">` : '<div style="width:80px"></div>';
+    return `<div class="print-header">${imgTag}<div class="header-text"><h1>${sName}</h1><h2>${sub} - ${aYear}</h2></div><div style="width:80px"></div></div>`;
+}
+
+function renderMaster() {
+    let html = getHeaderHTML("MASTER TIMETABLE"), dType = document.getElementById('displayType').value;
+    const breakLabel = document.getElementById('cfgBreakLabel').value || "TEA BREAK";
+    const lunchLabel = document.getElementById('cfgLunchLabel').value || "LUNCH BREAK";
+    
+    DAYS.forEach(day => {
+        html += `<div class="day-section"><div class="day-title">${day}</div>`;
+        html += `<table><colgroup><col style="width:70px">` + PERIODS.map(p => (p.p === "BREAK" || p.p === "LUNCH") ? `<col style="width:25px">` : `<col>`).join('') + `</colgroup>`;
+        html += `<tr><th>STREAM</th>` + PERIODS.map(p => `<th>${p.p}<span class="time-hdr">${p.t}</span></th>`).join('') + `</tr>`;
+        let lastP = "";
+        FORMS.forEach(f => {
+            if(lastP && f.substring(0,2) !== lastP.substring(0,2)) html += `<tr class="separator"><td colspan="${PERIODS.length + 1}"></td></tr>`;
+            lastP = f; 
+            html += `<tr><td style="font-weight:bold">${f}</td>`;
+            PERIODS.forEach(p => {
+                const special = getSpecialContent(day, p.p);
+                if(p.p === "BREAK") html += `<td class="break-cell">${breakLabel}</td>`;
+                else if(p.p === "LUNCH") html += `<td class="break-cell">${lunchLabel}</td>`;
+                else if(special) html += `<td class="${special.class}">${special.text}</td>`;
+                else {
+                    const m = timetable.find(x => x.day === day && x.period === p.p && x.form === f);
+                    html += `<td>${m ? `<b>${m.subject}</b>${dType === 'both' ? '<br>'+m.teacher : ''}` : ''}</td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+        html += `</table></div>`;
+    });
+    document.getElementById('output').innerHTML = html;
+}
+
+function renderIndividual(type) {
+    const val = type === 'stream' ? document.getElementById('streamSelect').value : document.getElementById('teacherSelect').value;
+    if(!val) return;
+    let html = getHeaderHTML(`${type.toUpperCase()} VIEW: ${val}`);
+    const breakLabel = document.getElementById('cfgBreakLabel').value || "TEA BREAK";
+    const lunchLabel = document.getElementById('cfgLunchLabel').value || "LUNCH BREAK";
+
+    html += `<table><colgroup><col style="width:100px">` + PERIODS.map(p => (p.p === "BREAK" || p.p === "LUNCH") ? `<col style="width:30px">` : `<col>`).join('') + `</colgroup><tr><th>DAY</th>` + PERIODS.map(p => `<th>${p.p}<span class="time-hdr">${p.t}</span></th>`).join('') + `</tr>`;
+    DAYS.forEach(day => {
+        html += `<tr><td style="font-weight:bold">${day}</td>`;
+        PERIODS.forEach(p => {
+            const isOff = type === 'teacher' && unavailabilities.some(u => u.t === val && u.d === day && u.p === p.p);
+            const special = getSpecialContent(day, p.p);
+            if(p.p === "BREAK") html += `<td class="break-cell">${breakLabel}</td>`;
+            else if(p.p === "LUNCH") html += `<td class="break-cell">${lunchLabel}</td>`;
+            else if(isOff) html += `<td class="unavailable-block">OFF-TIME</td>`;
+            else if(special) html += `<td class="${special.class}">${special.text}</td>`;
+            else {
+                const m = timetable.find(x => x.day === day && x.period === p.p && (type === 'stream' ? x.form === val : x.teacher === val));
+                html += `<td>${m ? `<b>${type === 'stream' ? m.subject : m.subject}</b><br><small>${type === 'stream' ? m.teacher : m.form}</small>` : ''}</td>`;
+            }
+        });
+        html += `</tr>`;
+    });
+    html += `</table>`;
+    document.getElementById('output').innerHTML = html;
+}
+
+function renderLoadSummary() {
+    let html = getHeaderHTML("TEACHER LOAD ASSIGNMENT SUMMARY");
+    html += `<table class="load-table"><tr><th>TEACHER NAME</th><th>ASSIGNED PERIODS / WEEK</th><th>STATUS DETAILED</th></tr>`;
+    
+    const summary = {};
+    rawData.forEach(r => { if(!summary[r.teacher]) summary[r.teacher] = 0; summary[r.teacher]++; });
+    
+    Object.keys(summary).sort().forEach(t => {
+        const load = timetable.filter(x => x.teacher === t).length;
+        const target = summary[t];
+        const isOver = load < target;
+        html += `<tr class="${isOver ? 'overload' : ''}"><td><b>${t}</b></td><td><b>${load} / ${target}</b></td><td>${isOver ? `Missing ${target - load} periods (Clash constraints)` : 'Fully Scheduled'}</td></tr>`;
+    });
+    
+    html += `</table>`;
+    document.getElementById('output').innerHTML = html;
+}
+
+function syncHeader() {
+    if(timetable.length > 0) {
+        const activeView = document.getElementById('streamSelect').value ? 'stream' : (document.getElementById('teacherSelect').value ? 'teacher' : 'master');
+        if(activeView === 'master') renderMaster();
+        else if(activeView === 'stream') renderIndividual('stream');
+        else if(activeView === 'teacher') renderIndividual('teacher');
+    }
+}
+
+function saveToLocalStorage() {
+    const dataState = {
+        schoolName: document.getElementById('schoolNameInput').value,
+        academicYear: document.getElementById('academicYearInput').value,
+        cfgStartTime: document.getElementById('cfgStartTime').value,
+        cfgPeriodDuration: document.getElementById('cfgPeriodDuration').value,
+        cfgBreakLabel: document.getElementById('cfgBreakLabel').value,
+        cfgBreakAfter: document.getElementById('cfgBreakAfter').value,
+        cfgBreakDuration: document.getElementById('cfgBreakDuration').value,
+        cfgHasLunch: document.getElementById('cfgHasLunch').value,
+        cfgLunchLabel: document.getElementById('cfgLunchLabel').value,
+        cfgLunchAfter: document.getElementById('cfgLunchAfter').value,
+        cfgLunchDuration: document.getElementById('cfgLunchDuration').value,
+        compactMode: document.getElementById('compactModeCheck').checked,
+        displayType: document.getElementById('displayType').value,
+        rowHeightRange: document.getElementById('rowHeightRange').value,
+        customSpecialBlocks,
+        unavailabilities,
+        rawData,
+        timetable,
+        logoSrc
+    };
+    localStorage.setItem('tt_pro_backup_state', JSON.stringify(dataState));
+}
+
+function loadFromLocalStorage() {
+    const saved = localStorage.getItem('tt_pro_backup_state');
+    if(!saved) return;
+    try {
+        const d = JSON.parse(saved);
+        document.getElementById('schoolNameInput').value = d.schoolName || "";
+        document.getElementById('academicYearInput').value = d.academicYear || "";
+        document.getElementById('cfgStartTime').value = d.cfgStartTime || "08:00";
+        document.getElementById('cfgPeriodDuration').value = d.cfgPeriodDuration || "40";
+        document.getElementById('cfgBreakLabel').value = d.cfgBreakLabel || "TEA BREAK";
+        document.getElementById('cfgBreakAfter').value = d.cfgBreakAfter || "P4";
+        document.getElementById('cfgBreakDuration').value = d.cfgBreakDuration || "30";
+        document.getElementById('cfgHasLunch').value = d.cfgHasLunch || "yes";
+        document.getElementById('cfgLunchLabel').value = d.cfgLunchLabel || "LUNCH BREAK";
+        document.getElementById('cfgLunchAfter').value = d.cfgLunchAfter || "P6";
+        document.getElementById('cfgLunchDuration').value = d.cfgLunchDuration || "45";
+        document.getElementById('compactModeCheck').checked = d.compactMode || false;
+        document.getElementById('displayType').value = d.displayType || "both";
+        document.getElementById('rowHeightRange').value = d.rowHeightRange || "45";
+        
+        if(d.customSpecialBlocks) customSpecialBlocks = d.customSpecialBlocks;
+        if(d.unavailabilities) unavailabilities = d.unavailabilities;
+        if(d.rawData) rawData = d.rawData;
+        if(d.timetable) timetable = d.timetable;
+        if(d.logoSrc) logoSrc = d.logoSrc;
+
+        toggleCompact({checked: d.compactMode});
+        adjustHeight(d.rowHeightRange);
+        updateSpecialBlocksList();
+        updateAvailList();
+        recalculatePeriods();
+
+        if(rawData.length > 0) {
+            document.getElementById('genBtn').disabled = false;
+            document.getElementById('status').style.color = "#28a745";
+            document.getElementById('status').innerText = `Backup Restored: ${rawData.length} lessons available.`;
+            populateFilters();
+            populateAvailDropdowns();
+        }
+        if(timetable.length > 0) {
+            document.getElementById('viewBar').style.display = 'block';
+            renderMaster();
+        }
+    } catch(e) { console.error("Error matching local storage schemas", e); }
+}
+
+function clearSystemBackup() {
+    if(confirm("Are you sure you want to completely clear out all table metrics, files, and teacher rules?")) {
+        localStorage.removeItem('tt_pro_backup_state');
+        window.location.reload();
+    }
+}
+
+// Initial Configuration Run
 recalculatePeriods();
+loadFromLocalStorage();
 </script>
 
 <script>
