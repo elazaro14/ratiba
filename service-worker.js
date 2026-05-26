@@ -1,13 +1,10 @@
 const CACHE_NAME = 'tt-pro-ultimate-v1';
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  'index.html',
+  'manifest.json'
 ];
 
-// Perform asset installations on launch
+// Installs and structural caching routines
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -16,7 +13,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Cache preservation logic
+// Cache management structure cleaning lifecycle
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -31,7 +28,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Network intercept with local application state fallback
+// Fetch events interception
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request).catch(() => {
